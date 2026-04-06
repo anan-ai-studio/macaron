@@ -314,7 +314,8 @@
             },
             playCollision: function() {
                 this.init();
-                this.playTone(1200, 'triangle', 0.05, 0.1); // カチャッ（硬い音）
+                // 耳障りでないより柔らかい「コトッ」という音に変更
+                this.playTone(250, 'sine', 0.05, 0.05, 150); 
             },
             playGameOver: function() {
                 this.init();
