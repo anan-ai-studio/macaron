@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>3D リアルマカロン積み上げパズル タイムアタック版</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #87CEEB;
+            touch-action: none; /* スワイプなどを無効化 */
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+        }
+        #canvas-container {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        /* 花吹雪用キャンバス */
+        #confettiCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 20;
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+        #scoreBoard {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffffff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        #timerBoard {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #ffeb3b;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            pointer-events: none;
+        }
+        #rankingBoard {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            pointer-events: none;
+            min-width: 150px;
+        }
+        #rankingBoard h3 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+            text-align: center;
+            border-bottom: 1px solid #aaa;
+            padding-bottom: 5px;
+        }
+        #rankingBoard ol {
+            margin: 0;
+            padding-left: 25px;
+            font-size: 16px;
+        }
+        .screen {
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            text-align: center;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            max-width: 80%;
+        }
+        #gameOverScreen, #gameClearScreen {
+            display: none;
+        }
+        .clear-banner {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            box-sizing: border-box;
+            pointer-events: auto;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 20px 40px;
+            border-radius: 30px 30px 0 0;
+            text-align: center;
+            box-shadow: 0 -8px 24px rgba(0,0,0,0.15);
+            display: flex;
+            flex-direction: row;
+            justify-content: space-around;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .clear-banner h1 {
+            margin: 0 0 5px 0;
+            color: #ff6b81;
+            font-size: 28px;
+        }
+        .clear-banner p {
+            margin: 0;
+        }
+        @media (max-width: 600px) {
+            .clear-banner {
+                flex-direction: column;
+                padding: 20px;
+            }
+        }
+        h1 {
+            margin-top: 0;
+            color: #333;
+            font-size: 24px;
+        }
+        p {
+            font-size: 16px;
+            color: #555;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+        .instruction-pc {
+            color: #0066cc;
+            font-weight: bold;
+        }
+        .new-record-text {
+            color: #e91e63;
+            font-weight: bold;
+            font-size: 20px;
+            display: none;
+            animation: blink 1s infinite alternate;
+        }
+        @keyframes blink {
+            from { opacity: 1; }
+            to { opacity: 0; }
+        }
+        button {
+            padding: 15px 40px;
+            font-size: 18px;
+            font-weight: bold;
+            border: none;
+            border-radius: 12px;
+            background-color: #ff9a9e; /* マカロンっぽい色 */
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 4px 10px rgba(255, 154, 158, 0.4);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 5px rgba(255, 154, 158, 0.4);
+        }
+    </style>
+    <!-- Three.js と Cannon.js の読み込み -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    <canvas id="confettiCanvas"></canvas>
+    
+    <div id="scoreBoard">スコア: <span id="score">0</span></div>
+    <div id="timerBoard">残り時間: <span id="timer">60</span>秒</div>
+
+    <div id="rankingBoard">
+        <h3>ベストスコア Top5</h3>
+        <ol id="rankingList">
+            <!-- JSで動的に追加 -->
+        </ol>
+    </div>
+
+    <!-- 終了後に表示されるボタン -->
+    <button id="retryBtnAfterFinish" style="display: none; position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); z-index: 30; pointer-events: auto; padding: 15px 30px; font-size: 18px; background-color: #ff9a9e; color: white; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(255, 154, 158, 0.4);">やっぱりもう一度遊ぶ</button>
+
+    <div id="ui">
+        <div id="startScreen" class="screen">
+            <h1>3D リアルマカロン タイムアタック</h1>
+            <p>
+                制限時間は1分間！できるだけ高く積もう！<br>
+                途中で可愛いお皿の上のマカロンがなくなったらゲームオーバー。<br><br>
+                【スマホ】スマホを水平に保って傾ける<br>
+                <span class="instruction-pc">【PC】マウスを動かしてお皿を傾ける</span>
+            </p>
+            <div style="display: flex; gap: 15px; justify-content: center;">
+                <button id="startBtn">ゲームスタート</button>
+                <button id="endBtnStart" style="background-color: #9e9e9e; box-shadow: 0 4px 10px rgba(158, 158, 158, 0.4);">終了</button>
+            </div>
+        </div>
+
+        <div id="gameOverScreen" class="screen">
+            <h1>ゲームオーバー！</h1>
+            <p>マカロンがすべて落ちてしまいました。</p>
+            <p style="font-size: 20px; font-weight: bold; color: #333;">記録: <span id="finalScoreOver">0</span> 個</p>
+            <button id="retryBtnOver">もう一度遊ぶ</button>
+        </div>
+
+        <div id="gameClearScreen" class="clear-banner">
+            <div>
+                <h1>タイムアップ！</h1>
+                <p>1分間耐え抜きました！</p>
+            </div>
+            <div>
+                <p style="font-size: 24px; font-weight: bold; color: #333;">最終スコア: <span id="finalScoreClear">0</span> 個</p>
+                <p id="newRecordText" class="new-record-text" style="margin-top: 5px;">🎉 新記録達成！ 🎉</p>
+            </div>
+            <div style="display: flex; gap: 15px; justify-content: center; align-items: center;">
+                <button id="retryBtnClear">もう一度遊ぶ</button>
+                <button id="finishBtnClear" style="background-color: #9e9e9e; box-shadow: 0 4px 10px rgba(158, 158, 158, 0.4);">終了</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // === HTML要素の取得 ===
+        const scoreEl = document.getElementById('score');
+        const timerEl = document.getElementById('timer');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const gameClearScreen = document.getElementById('gameClearScreen');
+        const finalScoreOverEl = document.getElementById('finalScoreOver');
+        const finalScoreClearEl = document.getElementById('finalScoreClear');
+        const newRecordText = document.getElementById('newRecordText');
+        const rankingListEl = document.getElementById('rankingList');
+        const startBtn = document.getElementById('startBtn');
+        const retryBtnOver = document.getElementById('retryBtnOver');
+        const retryBtnClear = document.getElementById('retryBtnClear');
+        const finishBtnClear = document.getElementById('finishBtnClear');
+        const retryBtnAfterFinish = document.getElementById('retryBtnAfterFinish');
+        const container = document.getElementById('canvas-container');
+        const confettiCanvas = document.getElementById('confettiCanvas');
+        const confettiCtx = confettiCanvas.getContext('2d');
+
+        // === グローバル変数 ===
+        let scene, camera, renderer;
+        let world;
+        let blocks = []; // 物理ボディと3Dメッシュのペアを保存する配列
+        let platformBody, platformMesh;
+        
+        let score = 0;
+        let timeLeft = 60;
+        let isGameOver = false;
+        let hasStartedStacking = false; // 1個以上積まれたかどうかのフラグ
+        
+        let dropIntervalId = null;
+        let timerIntervalId = null;
+        let animationFrameId = null;
+        let confettiFrameId = null;
+        let confettiTimeoutId = null;
+
+        // 台の傾き（角度）を保持する変数
+        let targetTiltX = 0; // 前後の傾き（X軸回転）
+        let targetTiltZ = 0; // 左右の傾き（Z軸回転）
+        const BASE_GRAVITY_Y = -9.8; 
+        const MAX_TILT_ANGLE = Math.PI / 8; // 最大22.5度傾く
+
+        // === サウンドシステム（Web Audio API） ===
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        const audioCtx = new AudioContext();
+        const SoundSystem = {
+            init: function() {
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+            },
+            playTone: function(freq, type, duration, vol, slideToFreq = null) {
+                if (!audioCtx) return;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = type;
+                osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+                if (slideToFreq) {
+                    osc.frequency.exponentialRampToValueAtTime(slideToFreq, audioCtx.currentTime + duration);
+                }
+                
+                gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+                
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + duration);
+            },
+            playClick: function() {
+                this.init();
+                this.playTone(880, 'sine', 0.1, 0.3); // ピッ
+            },
+            playSpawn: function() {
+                this.init();
+                this.playTone(400, 'sine', 0.15, 0.2, 800); // ポワン（上ずり）
+            },
+            playCollision: function() {
+                this.init();
+                this.playTone(1200, 'triangle', 0.05, 0.1); // カチャッ（硬い音）
+            },
+            playGameOver: function() {
+                this.init();
+                this.playTone(300, 'sawtooth', 0.8, 0.3, 50); // ガックリ下がる音
+            },
+            playClear: function() {
+                this.init();
+                // ファンファーレ（タ・タ・ター）
+                setTimeout(() => this.playTone(523.25, 'square', 0.2, 0.2), 0);
+                setTimeout(() => this.playTone(659.25, 'square', 0.2, 0.2), 150);
+                setTimeout(() => this.playTone(783.99, 'square', 0.4, 0.2), 300);
+            },
+            bgmInterval: null,
+            playBGM: function() {
+                this.init();
+                this.stopBGM();
+                // 楽しいポップなアルペジオループ
+                const notes = [392, 493.88, 587.33, 493.88]; // G4, B4, D5, B4
+                let noteIndex = 0;
+                
+                this.bgmInterval = setInterval(() => {
+                    if (isGameOver) return;
+                    this.playTone(notes[noteIndex], 'sine', 0.2, 0.05);
+                    noteIndex = (noteIndex + 1) % notes.length;
+                }, 300);
+            },
+            stopBGM: function() {
+                if (this.bgmInterval) {
+                    clearInterval(this.bgmInterval);
+                    this.bgmInterval = null;
+                }
+            }
+        };
+
+        // ランキングデータ
+        let rankings = [];
+
+        // === ランキング機能 ===
+        function loadRankings() {
+            const saved = localStorage.getItem('macaronStackRankings');
+            if (saved) {
+                rankings = JSON.parse(saved);
+            } else {
+                rankings = [0, 0, 0, 0, 0];
+            }
+            updateRankingUI();
+        }
+
+        function saveScore(newScore) {
+            let isNewRecord = false;
+            // 0より大きいスコアの場合にチェック
+            if (newScore > 0) {
+                // 最高記録を更新したかチェック
+                if (newScore > rankings[0]) {
+                    isNewRecord = true;
+                }
+                
+                rankings.push(newScore);
+                // 降順ソート
+                rankings.sort((a, b) => b - a);
+                // 上位5つを保持
+                rankings = rankings.slice(0, 5);
+                localStorage.setItem('macaronStackRankings', JSON.stringify(rankings));
+                updateRankingUI();
+            }
+            return isNewRecord;
+        }
+
+        function updateRankingUI() {
+            rankingListEl.innerHTML = '';
+            rankings.forEach((s) => {
+                const li = document.createElement('li');
+                li.textContent = s > 0 ? s + ' 個' : '---';
+                rankingListEl.appendChild(li);
+            });
+        }
+
+        // === 初期化処理 ===
+        function initGame() {
+            isGameOver = false;
+            hasStartedStacking = false;
+            score = 0;
+            timeLeft = 60;
+            scoreEl.textContent = score;
+            timerEl.textContent = timeLeft;
+            blocks = [];
+
+            // UIリセット
+            newRecordText.style.display = 'none';
+            stopConfetti();
+
+            loadRankings();
+            initPhysics();
+            init3D();
+            
+            window.addEventListener('resize', onWindowResize, false);
+            window.addEventListener('mousemove', handleMouseMove, false);
+
+            startLoop();
+            startGameLogic();
+        }
+
+        function initPhysics() {
+            world = new CANNON.World();
+            world.broadphase = new CANNON.NaiveBroadphase();
+            world.gravity.set(0, BASE_GRAVITY_Y, 0); 
+            world.solver.iterations = 20;
+
+            const defaultMaterial = new CANNON.Material("default");
+            const contactMaterial = new CANNON.ContactMaterial(defaultMaterial, defaultMaterial, {
+                friction: 0.8, // 少し高めの摩擦で滑りにくく
+                restitution: 0.2, // 少し跳ね返るように
+            });
+            world.addContactMaterial(contactMaterial);
+
+            // 可愛いお皿（プラットフォーム）の作成：大きくて薄い円柱
+            const platformShape = new CANNON.Cylinder(4, 4, 0.3, 32); 
+            // Cannon.jsのCylinderはZ軸に沿うため、Y軸に沿うように回転させる
+            const shapeQuat = new CANNON.Quaternion();
+            shapeQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+
+            platformBody = new CANNON.Body({ 
+                mass: 0, 
+                type: CANNON.Body.KINEMATIC,
+                material: defaultMaterial 
+            }); 
+            // 形状と同時にオフセット・回転を適用
+            platformBody.addShape(platformShape, new CANNON.Vec3(0, 0, 0), shapeQuat);
+            platformBody.position.set(0, -2, 0);
+            world.addBody(platformBody);
+        }
+
+        function init3D() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xFFE4E1); // 可愛いピンクがかった空
+            scene.fog = new THREE.Fog(0xFFE4E1, 20, 60);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 15, 25);
+            camera.lookAt(0, 3, 0);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0xFFE4E1, 1);
+            renderer.shadowMap.enabled = true; 
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 柔らかい高品質な影
+            container.innerHTML = '';
+            container.appendChild(renderer.domElement);
+
+            // ライティングの強化
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(10, 20, 10);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048; // 影の解像度アップ
+            dirLight.shadow.mapSize.height = 2048;
+            dirLight.shadow.camera.near = 0.5;
+            dirLight.shadow.camera.far = 50;
+            dirLight.shadow.camera.left = -15;
+            dirLight.shadow.camera.right = 15;
+            dirLight.shadow.camera.top = 15;
+            dirLight.shadow.camera.bottom = -15;
+            dirLight.shadow.bias = -0.0005;
+            scene.add(dirLight);
+
+            // 補助光（反射による立体感アップ）
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.4);
+            hemiLight.position.set(0, 20, 0);
+            scene.add(hemiLight);
+
+            // リアルな陶器のお皿（グループ）の作成
+            platformMesh = new THREE.Group();
+            
+            // お皿の材質（ツヤツヤの白い陶器）
+            const plateMat = new THREE.MeshPhysicalMaterial({ 
+                color: 0xfdfdfd,
+                metalness: 0.1,
+                roughness: 0.1,
+                clearcoat: 1.0,
+                clearcoatRoughness: 0.1
+            });
+
+            // お皿の底面
+            const baseGeo = new THREE.CylinderGeometry(3.8, 4, 0.2, 64);
+            const baseMesh = new THREE.Mesh(baseGeo, plateMat);
+            baseMesh.receiveShadow = true;
+            baseMesh.castShadow = true;
+            platformMesh.add(baseMesh);
+
+            // お皿のフチ（盛り上がり）
+            const rimGeo = new THREE.TorusGeometry(3.8, 0.15, 16, 64);
+            const rimMesh = new THREE.Mesh(rimGeo, plateMat);
+            rimMesh.rotation.x = Math.PI / 2;
+            rimMesh.position.y = 0.1;
+            rimMesh.receiveShadow = true;
+            rimMesh.castShadow = true;
+            platformMesh.add(rimMesh);
+
+            scene.add(platformMesh);
+
+            platformMesh.position.copy(platformBody.position);
+        }
+
+        // === ゲームロジック ===
+        function spawnBlock() {
+            if (isGameOver) return;
+
+            // マカロンのサイズ
+            const radius = 0.7 + Math.random() * 0.2; 
+            const height = 0.4 + Math.random() * 0.1;
+
+            // --- 物理ボディの作成 ---
+            const shape = new CANNON.Cylinder(radius, radius, height, 16);
+            // Cannon.jsのCylinderはZ軸に沿うため、Y軸に沿うように回転させる
+            const shapeQuat = new CANNON.Quaternion();
+            shapeQuat.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+
+            const body = new CANNON.Body({ mass: radius * 2 });
+            body.addShape(shape, new CANNON.Vec3(0, 0, 0), shapeQuat);
+            
+            // 最初からお皿の上に落ちるよう、中心付近から落とす
+            const spawnX = (Math.random() - 0.5) * 3;
+            const spawnZ = (Math.random() - 0.5) * 3;
+            body.position.set(spawnX, 12, spawnZ);
+            
+            // 少し回転させておく
+            const axis = new CANNON.Vec3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
+            axis.normalize(); 
+            body.quaternion.setFromAxisAngle(axis, Math.random() * Math.PI);
+            
+            body.addEventListener("collide", function(e) {
+                // 衝突時の相対速度がある程度大きければ音を鳴らす
+                if(e.contact.getImpactVelocityAlongNormal() > 0.5) {
+                    SoundSystem.playCollision();
+                }
+            });
+            world.addBody(body);
+            SoundSystem.playSpawn(); // マカロン出現音
+
+            // --- 3Dメッシュの作成（リアルなマカロン） ---
+            const pastelColors = [
+                0xFF6B81, 0xFFA502, 0xFFD32A, 0x2ED573, 0x1E90FF, 0x9C88FF, 0xFF5285
+            ];
+            const randomColor = pastelColors[Math.floor(Math.random() * pastelColors.length)];
+            
+            // マカロン生地（シェル）の材質: マットでサクッとした質感
+            const shellMat = new THREE.MeshStandardMaterial({ 
+                color: randomColor, 
+                roughness: 0.8, 
+                metalness: 0.05 
+            });
+
+            // クリームの材質: 少しツヤのあるクリーム色
+            const creamMat = new THREE.MeshStandardMaterial({
+                color: 0xfffdd0,
+                roughness: 0.3,
+                metalness: 0.0
+            });
+
+            const mesh = new THREE.Group();
+
+            // 上のシェル（半球をY軸で潰す）
+            const topShellGeo = new THREE.SphereGeometry(radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const topShell = new THREE.Mesh(topShellGeo, shellMat);
+            topShell.scale.set(1, 0.4, 1);
+            topShell.position.y = height * 0.2;
+            topShell.castShadow = true;
+            topShell.receiveShadow = true;
+            mesh.add(topShell);
+
+            // 下のシェル
+            const bottomShellGeo = new THREE.SphereGeometry(radius, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+            const bottomShell = new THREE.Mesh(bottomShellGeo, shellMat);
+            bottomShell.scale.set(1, 0.4, 1);
+            bottomShell.rotation.x = Math.PI; // 下向きにする
+            bottomShell.position.y = -height * 0.2;
+            bottomShell.castShadow = true;
+            bottomShell.receiveShadow = true;
+            mesh.add(bottomShell);
+
+            // 中のクリーム（一回り小さい円柱）
+            const creamGeo = new THREE.CylinderGeometry(radius * 0.85, radius * 0.85, height * 0.4, 32);
+            const cream = new THREE.Mesh(creamGeo, creamMat);
+            cream.castShadow = true;
+            cream.receiveShadow = true;
+            mesh.add(cream);
+
+            scene.add(mesh);
+            blocks.push({ body: body, mesh: mesh });
+        }
+
+        function startGameLogic() {
+            SoundSystem.playBGM();
+            spawnBlock(); // 最初の1個
+            dropIntervalId = setInterval(spawnBlock, 2000); // 2秒ごとに降ってくる
+            
+            // 1秒ごとにタイマーを減らす
+            timerIntervalId = setInterval(() => {
+                if (isGameOver) return;
+                timeLeft--;
+                timerEl.textContent = timeLeft;
+                
+                if (timeLeft <= 0) {
+                    triggerGameClear();
+                }
+            }, 1000);
+        }
+
+        // === メインループ（毎フレーム実行） ===
+        function startLoop() {
+            function animate() {
+                if (isGameOver) return;
+                animationFrameId = requestAnimationFrame(animate);
+
+                // 台の傾きを更新
+                const targetEuler = new THREE.Euler(targetTiltX, 0, targetTiltZ, 'XYZ');
+                const targetQuat = new THREE.Quaternion().setFromEuler(targetEuler);
+                platformMesh.quaternion.slerp(targetQuat, 0.1);
+                
+                platformBody.quaternion.set(
+                    platformMesh.quaternion.x,
+                    platformMesh.quaternion.y,
+                    platformMesh.quaternion.z,
+                    platformMesh.quaternion.w
+                );
+
+                world.step(1 / 60);
+
+                // ブロックの落下・削除処理
+                for (let i = blocks.length - 1; i >= 0; i--) {
+                    const b = blocks[i];
+                    b.mesh.position.copy(b.body.position);
+                    b.mesh.quaternion.copy(b.body.quaternion);
+
+                    // 落下判定（画面外の下に落ちたら）
+                    if (b.body.position.y < -10) {
+                        // ワールドとシーンから削除
+                        world.removeBody(b.body);
+                        scene.remove(b.mesh);
+                        // 配列から削除
+                        blocks.splice(i, 1);
+                    }
+                }
+
+                // スコア（現在台の上にあるブロックの数）を更新
+                score = blocks.length;
+                scoreEl.textContent = score;
+
+                // 1個以上積まれたか（scoreが1以上になったら）フラグを立てる
+                if (score > 0) {
+                    hasStartedStacking = true;
+                }
+
+                // 1度以上積まれた後で、スコアが0（全て落ちた）になったらゲームオーバー
+                if (hasStartedStacking && score === 0) {
+                    triggerGameOver();
+                }
+
+                renderer.render(scene, camera);
+            }
+            animate();
+        }
+
+        function triggerGameOver() {
+            isGameOver = true;
+            clearInterval(dropIntervalId);
+            clearInterval(timerIntervalId);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+            
+            SoundSystem.stopBGM();
+            SoundSystem.playGameOver();
+            
+            const isNewRecord = saveScore(score);
+            finalScoreOverEl.textContent = score;
+            gameOverScreen.style.display = 'block';
+            
+            if (isNewRecord) {
+                // ゲームオーバー時でも、もし新記録なら花吹雪
+                startConfetti();
+            }
+        }
+
+        function triggerGameClear() {
+            isGameOver = true;
+            clearInterval(dropIntervalId);
+            clearInterval(timerIntervalId);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+            SoundSystem.stopBGM();
+            SoundSystem.playClear();
+
+            const isNewRecord = saveScore(score);
+            finalScoreClearEl.textContent = score;
+            gameClearScreen.style.display = 'block';
+
+            if (isNewRecord) {
+                newRecordText.style.display = 'block';
+                startConfetti();
+            }
+        }
+
+        function cleanupGame() {
+            clearInterval(dropIntervalId);
+            clearInterval(timerIntervalId);
+            if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+            if (scene) {
+                while(scene.children.length > 0){ 
+                    const object = scene.children[0];
+                    scene.remove(object);
+                }
+            }
+            if (world) {
+                world = null;
+            }
+            if (renderer && renderer.domElement) {
+                container.innerHTML = '';
+            }
+            window.removeEventListener('mousemove', handleMouseMove);
+        }
+
+        function resetGame() {
+            cleanupGame();
+            gameOverScreen.style.display = 'none';
+            gameClearScreen.style.display = 'none';
+            retryBtnAfterFinish.style.display = 'none';
+            initGame();
+        }
+
+        // === 操作入力イベント ===
+        function handleMouseMove(event) {
+            if (isGameOver) return;
+            const normalizedX = (event.clientX / window.innerWidth) * 2 - 1;
+            const normalizedY = (event.clientY / window.innerHeight) * 2 - 1;
+            targetTiltZ = -normalizedX * MAX_TILT_ANGLE;
+            targetTiltX = normalizedY * MAX_TILT_ANGLE;
+        }
+
+        function handleOrientation(event) {
+            if (isGameOver) return;
+            let beta = event.beta;   
+            let gamma = event.gamma; 
+            if (beta === null || gamma === null) return;
+
+            if (beta > 45) beta = 45;
+            if (beta < -45) beta = -45;
+            if (gamma > 45) gamma = 45;
+            if (gamma < -45) gamma = -45;
+
+            targetTiltX = (beta / 45) * MAX_TILT_ANGLE;
+            targetTiltZ = -(gamma / 45) * MAX_TILT_ANGLE;
+        }
+
+        function requestOrientationPermission() {
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                            startScreen.style.display = 'none';
+                            initGame();
+                        } else {
+                            alert("ゲームを遊ぶには傾きセンサーの許可が必要です。");
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleOrientation);
+                startScreen.style.display = 'none';
+                initGame();
+            }
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            // 花吹雪キャンバスのリサイズ
+            confettiCanvas.width = window.innerWidth;
+            confettiCanvas.height = window.innerHeight;
+        }
+
+        // 初期表示時にランキングを読み込んでおく
+        loadRankings();
+        // キャンバスサイズ初期化
+        confettiCanvas.width = window.innerWidth;
+        confettiCanvas.height = window.innerHeight;
+
+        startBtn.addEventListener('click', () => {
+            SoundSystem.playClick();
+            requestOrientationPermission();
+        });
+        retryBtnOver.addEventListener('click', () => {
+            SoundSystem.playClick();
+            resetGame();
+        });
+        retryBtnClear.addEventListener('click', () => {
+            SoundSystem.playClick();
+            resetGame();
+        });
+        finishBtnClear.addEventListener('click', () => {
+            SoundSystem.playClick();
+            gameClearScreen.style.display = 'none';
+            retryBtnAfterFinish.style.display = 'block';
+        });
+        retryBtnAfterFinish.addEventListener('click', () => {
+            SoundSystem.playClick();
+            resetGame();
+        });
+
+        // === 花吹雪（Confetti）演出システム ===
+        let particles = [];
+        const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4CAF50', '#8BC34A', '#CDDC39', '#FFEB3B', '#FFC107', '#FF9800', '#FF5722'];
+
+        function startConfetti() {
+            particles = [];
+            const particleCount = 150;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push({
+                    x: Math.random() * confettiCanvas.width,
+                    y: Math.random() * confettiCanvas.height - confettiCanvas.height,
+                    r: Math.random() * 6 + 4,
+                    dx: Math.random() * 4 - 2,
+                    dy: Math.random() * 4 + 4,
+                    color: colors[Math.floor(Math.random() * colors.length)],
+                    tilt: Math.floor(Math.random() * 10) - 10,
+                    tiltAngleInc: (Math.random() * 0.07) + 0.05,
+                    tiltAngle: 0
+                });
+            }
+            renderConfetti();
+
+            // 10秒後に花吹雪を停止する
+            if (confettiTimeoutId) clearTimeout(confettiTimeoutId);
+            confettiTimeoutId = setTimeout(stopConfetti, 10000);
+        }
+
+        function renderConfetti() {
+            confettiFrameId = requestAnimationFrame(renderConfetti);
+            confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            
+            for (let i = 0; i < particles.length; i++) {
+                let p = particles[i];
+                p.tiltAngle += p.tiltAngleInc;
+                p.y += (Math.cos(p.tiltAngle) + p.dy + p.r / 2) / 2;
+                p.x += Math.sin(p.tiltAngle) * 2;
+                
+                confettiCtx.beginPath();
+                confettiCtx.lineWidth = p.r;
+                confettiCtx.strokeStyle = p.color;
+                confettiCtx.moveTo(p.x + p.tilt + p.r, p.y);
+                confettiCtx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r);
+                confettiCtx.stroke();
+
+                // 画面下部に行ったら上部に戻す
+                if (p.y > confettiCanvas.height) {
+                    p.x = Math.random() * confettiCanvas.width;
+                    p.y = -10;
+                }
+            }
+        }
+
+        function stopConfetti() {
+            if (confettiFrameId) {
+                cancelAnimationFrame(confettiFrameId);
+                confettiCtx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
+            }
+            if (confettiTimeoutId) {
+                clearTimeout(confettiTimeoutId);
+                confettiTimeoutId = null;
+            }
+        }
+
+    </script>
+</body>
+</html>
