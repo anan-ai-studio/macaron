@@ -548,10 +548,13 @@
             axis.normalize(); 
             body.quaternion.setFromAxisAngle(axis, Math.random() * Math.PI);
             
+            // 初回の衝突時のみ音を鳴らすためのフラグ
+            body.hasCollided = false;
             body.addEventListener("collide", function(e) {
-                // 衝突時の相対速度がある程度大きければ音を鳴らす
-                if(e.contact.getImpactVelocityAlongNormal() > 0.5) {
+                // 初回の衝突で、かつ一定以上の勢いでぶつかった時のみ音を鳴らす
+                if(!body.hasCollided && e.contact.getImpactVelocityAlongNormal() > 0.5) {
                     SoundSystem.playCollision();
+                    body.hasCollided = true;
                 }
             });
             world.addBody(body);
@@ -762,13 +765,34 @@
             let gamma = event.gamma; 
             if (beta === null || gamma === null) return;
 
-            if (beta > 45) beta = 45;
-            if (beta < -45) beta = -45;
-            if (gamma > 45) gamma = 45;
-            if (gamma < -45) gamma = -45;
+            // 画面の向きを取得
+            let orientation = window.orientation || (screen.orientation || {}).angle || 0;
+            let tiltX = 0;
+            let tiltZ = 0;
 
-            targetTiltX = (beta / 45) * MAX_TILT_ANGLE;
-            targetTiltZ = -(gamma / 45) * MAX_TILT_ANGLE;
+            // 画面の向きに合わせてセンサーの軸を入れ替える
+            if (orientation === 90) {
+                tiltX = gamma;
+                tiltZ = beta;
+            } else if (orientation === -90 || orientation === 270) {
+                tiltX = -gamma;
+                tiltZ = -beta;
+            } else if (orientation === 180) {
+                tiltX = -beta;
+                tiltZ = gamma;
+            } else { // 0度（通常の縦持ち）
+                tiltX = beta;
+                tiltZ = -gamma;
+            }
+
+            // 傾きの最大値を制限 (45度)
+            if (tiltX > 45) tiltX = 45;
+            if (tiltX < -45) tiltX = -45;
+            if (tiltZ > 45) tiltZ = 45;
+            if (tiltZ < -45) tiltZ = -45;
+
+            targetTiltX = (tiltX / 45) * MAX_TILT_ANGLE;
+            targetTiltZ = (tiltZ / 45) * MAX_TILT_ANGLE;
         }
 
         function requestOrientationPermission() {
